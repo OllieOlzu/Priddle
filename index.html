@@ -49,7 +49,6 @@
             transition: all 0.5s ease;
         }
 
-        /* The hidden stripes overlay */
         .stripe-mask {
             position: absolute;
             top: 0;
@@ -62,7 +61,7 @@
 
         .mask-segment {
             flex: 1;
-            background-color: #2b2b2b; /* Dark "hidden" color */
+            background-color: #2b2b2b;
             border-bottom: 1px solid rgba(255,255,255,0.05);
             transition: opacity 0.5s ease, transform 0.5s ease;
         }
@@ -97,16 +96,16 @@
     <header class="mb-8 text-center mt-8">
         <h1 class="text-4xl font-extrabold mb-2 tracking-tight">Priddle</h1>
         <p class="opacity-75">Guess the flag! New stripes reveal with every wrong guess.</p>
-        <p class="opacity-75">Developed by W. Hodder and O. Young.</p>
+        <p class="opacity-75">Developed by W. Hodder and O. Young</p>
     </header>
 
     <div class="game-container bg-[var(--card-bg)] rounded-3xl shadow-xl p-6 md:p-8">
         
         <div id="flag-display" class="flag-display">
-            <!-- Background will be set via JS -->
             <div id="mask" class="stripe-mask"></div>
         </div>
 
+        <!-- Gameplay Controls -->
         <div id="game-controls" class="flex flex-col gap-4">
             <div class="flex gap-2">
                 <div class="relative flex-grow">
@@ -125,17 +124,30 @@
                     Submit
                 </button>
             </div>
-            
             <p id="message" class="font-semibold text-lg h-6"></p>
         </div>
 
+        <!-- Success Screen -->
         <div id="success-controls" class="hidden flex flex-col gap-4">
             <h2 class="text-2xl font-bold text-green-500">Correct!</h2>
+            <p id="win-text" class="text-lg opacity-90 mb-2"></p>
             <button 
                 onclick="initGame()" 
                 class="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-xl font-bold text-xl transition-transform active:scale-95"
             >
                 Play Again
+            </button>
+        </div>
+
+        <!-- Failure Screen -->
+        <div id="failure-controls" class="hidden flex flex-col gap-4">
+            <h2 class="text-2xl font-bold text-red-500">Out of Guesses!</h2>
+            <p id="fail-text" class="text-lg opacity-90 mb-2"></p>
+            <button 
+                onclick="initGame()" 
+                class="bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-xl font-bold text-xl transition-transform active:scale-95"
+            >
+                Try Again
             </button>
         </div>
 
@@ -148,6 +160,7 @@
     <script>
         const flags = [
             { name: "Rainbow", colors: ["#E40303", "#FF8C00", "#FFED00", "#008026", "#24408E", "#732982"] },
+            { name: "Aroace", colors: ["#E28C00", "#ECEC00", "#FFFFFF", "#62B0D9", "#203856"] },
             { name: "Transgender", colors: ["#5BCEFA", "#F5A9B8", "#FFFFFF", "#F5A9B8", "#5BCEFA"] },
             { name: "Bisexual", colors: ["#D60270", "#D60270", "#9B4F96", "#0038A8", "#0038A8"] },
             { name: "Pansexual", colors: ["#FF218C", "#FFD800", "#21B1FF"] },
@@ -230,7 +243,6 @@
         }
 
         function initGame() {
-            // Reset State
             guesses = 0;
             revealedIndices = [];
             document.getElementById('history-list').innerHTML = '';
@@ -238,15 +250,13 @@
             document.getElementById('guess-input').value = '';
             document.getElementById('game-controls').classList.remove('hidden');
             document.getElementById('success-controls').classList.add('hidden');
+            document.getElementById('failure-controls').classList.add('hidden');
 
-            // Pick Random Target
             currentTarget = flags[Math.floor(Math.random() * flags.length)];
             
-            // Build Display
             const display = document.getElementById('flag-display');
             display.style.background = createGradient(currentTarget.colors);
 
-            // Create Mask
             const mask = document.getElementById('mask');
             mask.innerHTML = '';
             currentTarget.colors.forEach((_, i) => {
@@ -256,13 +266,12 @@
                 mask.appendChild(seg);
             });
 
-            // Reveal First Random Stripe
             revealRandomStripe();
         }
 
         function revealRandomStripe() {
             const total = currentTarget.colors.length;
-            if (revealedIndices.length >= total) return;
+            if (revealedIndices.length >= total) return false;
 
             let randomIndex;
             do {
@@ -271,6 +280,7 @@
 
             revealedIndices.push(randomIndex);
             document.getElementById(`mask-${randomIndex}`).classList.add('revealed');
+            return true;
         }
 
         function submitGuess() {
@@ -279,10 +289,8 @@
             if (!guess) return;
 
             guesses++;
-            
             const isCorrect = checkMatch(guess, currentTarget.name);
 
-            // Add to history
             const historyList = document.getElementById('history-list');
             const item = document.createElement('div');
             item.className = 'history-item';
@@ -295,57 +303,58 @@
             historyList.prepend(item);
 
             if (isCorrect) {
-                // Win state
                 document.getElementById('game-controls').classList.add('hidden');
                 document.getElementById('success-controls').classList.remove('hidden');
+                document.getElementById('win-text').innerText = `That's the ${currentTarget.name} flag!`;
                 // Reveal all
                 currentTarget.colors.forEach((_, i) => {
                     document.getElementById(`mask-${i}`).classList.add('revealed');
                 });
             } else {
-                document.getElementById('message').innerText = "Not quite! Another stripe revealed.";
-                document.getElementById('message').classList.add('text-red-400');
-                revealRandomStripe();
-                input.value = '';
+                const moreStripes = revealRandomStripe();
+                if (!moreStripes) {
+                    // Out of reveals (Failure state)
+                    document.getElementById('game-controls').classList.add('hidden');
+                    document.getElementById('failure-controls').classList.remove('hidden');
+                    document.getElementById('fail-text').innerText = `It was the ${currentTarget.name} flag.`;
+                } else {
+                    document.getElementById('message').innerText = "Not quite! Another stripe revealed.";
+                    document.getElementById('message').classList.add('text-red-400');
+                    input.value = '';
+                }
             }
         }
 
-        // Helper to check match (handles the "Litho / Akoi" slash logic)
         function checkMatch(guess, targetName) {
-            const g = guess.toLowerCase();
+            const g = guess.toLowerCase().trim();
             const t = targetName.toLowerCase();
             
-            // If the name is a combined string like "Litho / Akoi", 
-            // allow matching any individual component
+            // If target is "A / B", check if guess is A or B or A/B
             if (t.includes('/')) {
-                const parts = t.split('/').map(p => p.trim());
-                return parts.some(p => p === g) || t === g;
+                const components = t.split('/').map(c => c.trim().toLowerCase());
+                return components.includes(g) || t === g;
             }
             
             return g === t;
         }
 
-        // Populate Datalist
+        // Initialize Search Suggestions
         const datalist = document.getElementById('flag-list');
-        // Flatten list for suggestions (splitting the slashes)
-        const allSuggestions = [];
+        const allSuggestions = new Set();
         flags.forEach(f => {
             if (f.name.includes('/')) {
-                f.name.split('/').forEach(p => allSuggestions.push(p.trim()));
+                f.name.split('/').forEach(p => allSuggestions.add(p.trim()));
             }
-            allSuggestions.push(f.name);
+            allSuggestions.add(f.name);
         });
 
-        [...new Set(allSuggestions)].sort().forEach(name => {
+        Array.from(allSuggestions).sort().forEach(name => {
             const opt = document.createElement('option');
             opt.value = name;
             datalist.appendChild(opt);
         });
 
-        // Initialize on load
         window.onload = initGame;
-
-        // Allow Enter key
         document.getElementById('guess-input').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') submitGuess();
         });
